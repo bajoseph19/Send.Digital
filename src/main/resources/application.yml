@@ -1,0 +1,30 @@
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: sendCorp
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: nzeako.dev
+    password: qwerty123456/
+
+    properties:
+      mail:
+        smtp:
+          ssl:
+            trust: "*"
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
