@@ -1,0 +1,34 @@
+
+server:
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  data:
+    mongodb:
+#      host: cluster0.3vf8y.mongodb.net
+#      port: 27017
+#      username: send-corp
+#      password: z44Kz8F7leW1Yolf
+#      database: sendCorp
+      uri: mongodb+srv://send-corp:z44Kz8F7leW1Yolf@cluster0.3vf8y.mongodb.net/sendCorp?retryWrites=true&w=majority
+
+  mail:
+    default-encoding: UTF-8
+    host: smtp.mailgun.org
+    port: 587
+    username: postmaster@mailing.send.digital
+    password: f0df9f374a854aeade0ea24964e507f0-1d8af1f4-7991a944
+
+    properties:
+      mail:
+        smtp:
+          ssl:
+            trust: "*"
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 6000
+          writetimeout: 10000
