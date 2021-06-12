@@ -1,0 +1,55 @@
+description: A Web App For Cash2 With Flutter.
+version: 1.0.0+1
+name: cash
+
+environment:
+    sdk: ">=2.12.0 <3.0.0"
+
+dependencies:
+    flutter:
+        sdk: flutter
+
+    font_awesome_flutter: ^9.0.0
+    shared_preferences: ^2.0.6
+    image_picker: ^0.7.5+3
+    fluttertoast: ^8.0.7
+    characters: ^1.1.0
+    velocity_x: ^3.2.0
+    http: ^0.13.3
+    intl: ^0.17.0
+    get: ^4.1.4
+
+dev_dependencies:
+    flutter_test:
+        sdk: flutter
+
+flutter:
+    uses-material-design: true
+
+    assets:
+      - assets/images/facebook.png
+      - assets/images/transfer.png
+      - assets/images/deposit.png
+      - assets/images/zenith.png
+      - assets/images/wallet.png
+      - assets/images/swings.png
+      - assets/images/google.png
+      - assets/images/bills.png
+      - assets/images/logo.png
+      - assets/images/kosi.png
+      - assets/images/gtb.png
+      - assets/images/uba.png
+      - assets/images/cib.png
+
+    fonts:
+      - family: CircularStd
+        fonts:
+          - asset: assets/fonts/CircularStd.ttf
+
+      - family: WorkSans
+        fonts:
+          - asset: assets/fonts/WorkSans.ttf
+
+      - family: Inter
+        fonts:
+          - asset: assets/fonts/Inter.ttf
