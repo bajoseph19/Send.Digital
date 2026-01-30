@@ -288,19 +288,6 @@ def render_board(engine: TetherChessEngine):
                 if info["is_rank_mate"]:
                     label = f"🔴{label}"
 
-                # Style the container
-                bg = info["bg_color"]
-                border = "3px solid #ff6b6b" if info["is_rank_mate"] else "1px solid #333"
-
-                # Use markdown + button combo for visual + click
-                st.markdown(
-                    f"""<div style="background-color: {bg}; border: {border};
-                        border-radius: 4px; margin: 1px; min-height: 50px;
-                        display: flex; align-items: center; justify-content: center;">
-                    </div>""",
-                    unsafe_allow_html=True
-                )
-
                 if st.button(
                     label,
                     key=f"sq_{x}_{y}",
