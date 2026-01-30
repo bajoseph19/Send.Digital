@@ -93,52 +93,75 @@ class Board:
     def calculate_transporter_vector(self, piece: Piece, mates: List[Piece]) -> List[Move]:
         """
         STEP 2: calculateTransporterVector(piece, mates)
-        Generates move-set from union of all mates' native moves applied to piece's origin.
+        The moving piece can TELEPORT to any square that its rank-mates
+        can actually reach from THEIR current positions.
 
         KEY RULES:
-        - Path Integrity: Sliding moves must have clear paths from origin
+        - Teleportation: Piece goes to where rank-mates CAN go (not borrowing pattern)
+        - Path Integrity: Rank-mate's path must be clear from THEIR position
         - No Recursive Jumping: Each transporter move is marked (cannot chain)
         """
         transporter_moves = []
-        origin = piece.position
+        seen_targets = set()  # Avoid duplicate moves to same square
 
         for mate in mates:
+            mate_origin = mate.position
+
             for dx, dy, is_sliding in mate.get_native_movement_vectors():
                 if is_sliding:
+                    # Sliding piece: check path from MATE's position
                     for distance in range(1, 8):
-                        target = origin.offset(dx * distance, dy * distance)
+                        target = mate_origin.offset(dx * distance, dy * distance)
                         if not target.is_valid():
                             break
 
                         target_piece = self.get_piece_at(target)
 
+                        # Can't teleport to where the moving piece already is
+                        if target == piece.position:
+                            if target_piece:
+                                break  # Path blocked by moving piece
+                            continue
+
                         if target_piece:
-                            # Can capture enemy piece
+                            # Can capture enemy piece (teleport and capture)
                             if target_piece.is_white != piece.is_white:
-                                move = self._create_transporter_move(
-                                    piece, target, mate, target_piece
-                                )
-                                if move:
-                                    transporter_moves.append(move)
+                                if target not in seen_targets:
+                                    move = self._create_transporter_move(
+                                        piece, target, mate, target_piece
+                                    )
+                                    if move:
+                                        transporter_moves.append(move)
+                                        seen_targets.add(target)
                             break  # Path blocked
 
-                        # Empty square
-                        move = self._create_transporter_move(piece, target, mate, None)
-                        if move:
-                            transporter_moves.append(move)
+                        # Empty square - can teleport there
+                        if target not in seen_targets:
+                            move = self._create_transporter_move(piece, target, mate, None)
+                            if move:
+                                transporter_moves.append(move)
+                                seen_targets.add(target)
                 else:
-                    # Non-sliding (Knight, King)
-                    target = origin.offset(dx, dy)
+                    # Non-sliding (Knight, King): single jump from MATE's position
+                    target = mate_origin.offset(dx, dy)
                     if not target.is_valid():
                         continue
 
+                    # Can't teleport to own position
+                    if target == piece.position:
+                        continue
+
                     target_piece = self.get_piece_at(target)
+
+                    # Can't teleport onto friendly pieces (except self, handled above)
                     if target_piece and target_piece.is_white == piece.is_white:
                         continue
 
-                    move = self._create_transporter_move(piece, target, mate, target_piece)
-                    if move:
-                        transporter_moves.append(move)
+                    if target not in seen_targets:
+                        move = self._create_transporter_move(piece, target, mate, target_piece)
+                        if move:
+                            transporter_moves.append(move)
+                            seen_targets.add(target)
 
         return transporter_moves
 
@@ -246,10 +269,13 @@ class Board:
         rank_mates = self.identify_rank_mates(piece)
         moves.extend(self.calculate_transporter_vector(piece, rank_mates))
 
-        # Filter moves that leave king in check (TEMPORARILY DISABLED FOR DEBUG)
-        # TODO: Re-enable after fixing the bug
-        # if not skip_check_filter:
-        #     moves = [m for m in moves if not self._leaves_king_in_check(m)]
+        # Filter moves that leave king in check (standard chess legality)
+        if not skip_check_filter:
+            legal_moves = []
+            for move in moves:
+                if not self._leaves_king_in_check(move):
+                    legal_moves.append(move)
+            moves = legal_moves
 
         return moves
 
@@ -412,12 +438,14 @@ class Board:
         return in_check
 
     def find_king(self, is_white: bool) -> Optional[Position]:
-        """Find the king of a given color."""
+        """Find the king of a given color. Returns its actual board position."""
         for x in range(8):
             for y in range(8):
                 piece = self.squares[x][y]
                 if piece and piece.piece_type == PieceType.KING and piece.is_white == is_white:
-                    return piece.position
+                    # Return the actual position on the board, not piece.position
+                    # This ensures correctness during temporary move simulation
+                    return Position(x, y)
         return None
 
     # ========================================================================
