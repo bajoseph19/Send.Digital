@@ -145,6 +145,7 @@ def handle_square_click(x: int, y: int):
     """Handle clicking on a square."""
     engine = st.session_state.engine
     pos = Position(x, y)
+    needs_rerun = False
 
     if st.session_state.selected_square is None:
         # First click - select a piece
@@ -153,6 +154,7 @@ def handle_square_click(x: int, y: int):
             st.session_state.selected_square = pos
             st.session_state.legal_moves_for_selected = engine.get_legal_moves_for_piece(pos)
             st.session_state.message = f"Selected {piece.piece_type.name} at {pos}"
+            needs_rerun = True
     else:
         # Second click - try to make a move
         from_pos = st.session_state.selected_square
@@ -162,6 +164,7 @@ def handle_square_click(x: int, y: int):
             st.session_state.selected_square = None
             st.session_state.legal_moves_for_selected = []
             st.session_state.message = ""
+            needs_rerun = True
         else:
             # Try to move
             result = engine.make_move(from_pos, pos)
@@ -170,6 +173,7 @@ def handle_square_click(x: int, y: int):
                 st.session_state.message = result.message
                 st.session_state.selected_square = None
                 st.session_state.legal_moves_for_selected = []
+                needs_rerun = True
             else:
                 # Maybe selecting a different piece?
                 piece = engine.board.get_piece_at(pos)
@@ -177,8 +181,68 @@ def handle_square_click(x: int, y: int):
                     st.session_state.selected_square = pos
                     st.session_state.legal_moves_for_selected = engine.get_legal_moves_for_piece(pos)
                     st.session_state.message = f"Selected {piece.piece_type.name} at {pos}"
+                    needs_rerun = True
                 else:
                     st.session_state.message = result.message
+                    needs_rerun = True
+
+    if needs_rerun:
+        st.rerun()
+
+
+def get_square_info(engine: TetherChessEngine, x: int, y: int):
+    """Get display info for a square."""
+    pos = Position(x, y)
+    piece = engine.board.get_piece_at(pos)
+
+    # Base color
+    is_light = (x + y) % 2 == 1
+    bg_color = "#f0d9b5" if is_light else "#b58863"
+
+    # Move indicator
+    indicator = ""
+    move_type = None
+
+    # Selected square
+    if st.session_state.selected_square == pos:
+        bg_color = "#7fff00"
+
+    # Legal move destinations
+    for move in st.session_state.legal_moves_for_selected:
+        if move.to_pos == pos:
+            if move.is_pawn_knight_apex:
+                indicator = "⭐"  # Gold star for apex
+                move_type = "apex"
+            elif move.is_transporter:
+                indicator = "🔵"  # Blue for transporter
+                move_type = "transporter"
+            else:
+                indicator = "🟢"  # Green for native
+                move_type = "native"
+            break
+
+    # Rank-mate indicator
+    is_rank_mate = False
+    if st.session_state.selected_square:
+        rank_mates = engine.get_rank_mates_positions(st.session_state.selected_square)
+        if pos in rank_mates:
+            is_rank_mate = True
+
+    # Check highlighting
+    is_check = False
+    if piece and piece.piece_type == PieceType.KING:
+        if piece.is_white == engine.board.white_to_move and engine.board.is_in_check():
+            bg_color = "#ff6b6b"
+            is_check = True
+
+    return {
+        "piece": piece,
+        "bg_color": bg_color,
+        "indicator": indicator,
+        "move_type": move_type,
+        "is_rank_mate": is_rank_mate,
+        "is_check": is_check
+    }
 
 
 def render_board(engine: TetherChessEngine):
@@ -198,60 +262,56 @@ def render_board(engine: TetherChessEngine):
 
         # Rank label
         with cols[0]:
-            st.markdown(f"<div style='line-height: 60px; font-weight: bold;'>{y + 1}</div>",
+            st.markdown(f"<div style='line-height: 50px; font-weight: bold;'>{y + 1}</div>",
                        unsafe_allow_html=True)
 
         for x in range(8):
             with cols[x + 1]:
-                piece = engine.board.get_piece_at(Position(x, y))
+                info = get_square_info(engine, x, y)
+                piece = info["piece"]
+
+                # Build button label with piece and indicator
                 piece_symbol = piece.get_unicode() if piece else ""
+                indicator = info["indicator"]
 
-                # Determine background color
-                is_light = (x + y) % 2 == 1
-                base_color = "#f0d9b5" if is_light else "#b58863"
+                # Create label: piece on top, indicator below (or just indicator if empty)
+                if piece_symbol and indicator:
+                    label = f"{piece_symbol}\n{indicator}"
+                elif piece_symbol:
+                    label = piece_symbol
+                elif indicator:
+                    label = indicator
+                else:
+                    label = " "
 
-                pos = Position(x, y)
+                # Add rank-mate marker
+                if info["is_rank_mate"]:
+                    label = f"🔴{label}"
 
-                # Check for special highlighting
-                bg_color = base_color
-                border = "none"
+                # Style the container
+                bg = info["bg_color"]
+                border = "3px solid #ff6b6b" if info["is_rank_mate"] else "1px solid #333"
 
-                if st.session_state.selected_square == pos:
-                    bg_color = "#7fff00"
-
-                # Legal move destinations
-                for move in st.session_state.legal_moves_for_selected:
-                    if move.to_pos == pos:
-                        if move.is_pawn_knight_apex:
-                            bg_color = "#ffd700"
-                        elif move.is_transporter:
-                            bg_color = "#87ceeb"
-                        else:
-                            bg_color = "#90ee90"
-                        break
-
-                # Rank-mate highlighting
-                if st.session_state.selected_square:
-                    rank_mates = engine.get_rank_mates_positions(st.session_state.selected_square)
-                    if pos in rank_mates:
-                        border = "4px solid #ff6b6b"
-
-                # Check highlighting
-                if piece and piece.piece_type == PieceType.KING:
-                    if piece.is_white == engine.board.white_to_move and engine.board.is_in_check():
-                        bg_color = "#ff6b6b"
+                # Use markdown + button combo for visual + click
+                st.markdown(
+                    f"""<div style="background-color: {bg}; border: {border};
+                        border-radius: 4px; margin: 1px; min-height: 50px;
+                        display: flex; align-items: center; justify-content: center;">
+                    </div>""",
+                    unsafe_allow_html=True
+                )
 
                 if st.button(
-                    piece_symbol,
+                    label,
                     key=f"sq_{x}_{y}",
-                    help=f"{Position(x, y)}",
+                    help=f"{Position(x, y)} - Click to select/move",
                     use_container_width=True
                 ):
                     handle_square_click(x, y)
 
         # Rank label (right side)
         with cols[9]:
-            st.markdown(f"<div style='line-height: 60px; font-weight: bold;'>{y + 1}</div>",
+            st.markdown(f"<div style='line-height: 50px; font-weight: bold;'>{y + 1}</div>",
                        unsafe_allow_html=True)
 
 
@@ -297,12 +357,11 @@ def main():
 
         # Legend
         st.markdown("""
-        **Legend:**
-        - 🟢 Green = Legal native moves
-        - 🔵 Blue = Transporter moves (borrowed movement)
-        - 🟡 Gold = Pawn-Knight Apex (instant promotion!)
-        - 🔴 Red border = Rank-mates (pieces sharing movement)
-        - 🔴 Red background = King in check
+        **Legend (indicators on squares):**
+        - 🟢 = Legal native move
+        - 🔵 = Transporter move (borrowed movement)
+        - ⭐ = Pawn-Knight Apex (instant promotion!)
+        - 🔴 prefix = Rank-mate (piece sharing movement with selected)
         """)
 
     with col2:
