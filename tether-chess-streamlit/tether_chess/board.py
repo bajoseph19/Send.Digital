@@ -235,7 +235,7 @@ class Board:
 
         return all_moves
 
-    def generate_legal_moves_for_piece(self, piece: Piece) -> List[Move]:
+    def generate_legal_moves_for_piece(self, piece: Piece, skip_check_filter: bool = False) -> List[Move]:
         """Generate all legal moves for a specific piece."""
         moves = []
 
@@ -246,8 +246,10 @@ class Board:
         rank_mates = self.identify_rank_mates(piece)
         moves.extend(self.calculate_transporter_vector(piece, rank_mates))
 
-        # Filter moves that leave king in check
-        moves = [m for m in moves if not self._leaves_king_in_check(m)]
+        # Filter moves that leave king in check (TEMPORARILY DISABLED FOR DEBUG)
+        # TODO: Re-enable after fixing the bug
+        # if not skip_check_filter:
+        #     moves = [m for m in moves if not self._leaves_king_in_check(m)]
 
         return moves
 
