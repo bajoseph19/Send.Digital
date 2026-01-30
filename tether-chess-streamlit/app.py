@@ -152,8 +152,14 @@ def handle_square_click(x: int, y: int):
         piece = engine.board.get_piece_at(pos)
         if piece and piece.is_white == engine.board.white_to_move:
             st.session_state.selected_square = pos
-            st.session_state.legal_moves_for_selected = engine.get_legal_moves_for_piece(pos)
-            st.session_state.message = f"Selected {piece.piece_type.name} at {pos}"
+            moves = engine.get_legal_moves_for_piece(pos)
+            st.session_state.legal_moves_for_selected = moves
+            # Debug info
+            native_count = len([m for m in moves if not m.is_transporter])
+            trans_count = len([m for m in moves if m.is_transporter])
+            unfiltered = getattr(engine, '_debug_unfiltered', '?')
+            filtered = getattr(engine, '_debug_filtered', '?')
+            st.session_state.message = f"Selected {piece.piece_type.name} at {pos} - Before filter: {unfiltered}, After: {filtered} ({native_count} native, {trans_count} trans)"
             needs_rerun = True
     else:
         # Second click - try to make a move
