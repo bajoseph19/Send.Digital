@@ -145,6 +145,7 @@ def handle_square_click(x: int, y: int):
     """Handle clicking on a square."""
     engine = st.session_state.engine
     pos = Position(x, y)
+    needs_rerun = False
 
     if st.session_state.selected_square is None:
         # First click - select a piece
@@ -153,6 +154,7 @@ def handle_square_click(x: int, y: int):
             st.session_state.selected_square = pos
             st.session_state.legal_moves_for_selected = engine.get_legal_moves_for_piece(pos)
             st.session_state.message = f"Selected {piece.piece_type.name} at {pos}"
+            needs_rerun = True
     else:
         # Second click - try to make a move
         from_pos = st.session_state.selected_square
@@ -162,6 +164,7 @@ def handle_square_click(x: int, y: int):
             st.session_state.selected_square = None
             st.session_state.legal_moves_for_selected = []
             st.session_state.message = ""
+            needs_rerun = True
         else:
             # Try to move
             result = engine.make_move(from_pos, pos)
@@ -170,6 +173,7 @@ def handle_square_click(x: int, y: int):
                 st.session_state.message = result.message
                 st.session_state.selected_square = None
                 st.session_state.legal_moves_for_selected = []
+                needs_rerun = True
             else:
                 # Maybe selecting a different piece?
                 piece = engine.board.get_piece_at(pos)
@@ -177,8 +181,13 @@ def handle_square_click(x: int, y: int):
                     st.session_state.selected_square = pos
                     st.session_state.legal_moves_for_selected = engine.get_legal_moves_for_piece(pos)
                     st.session_state.message = f"Selected {piece.piece_type.name} at {pos}"
+                    needs_rerun = True
                 else:
                     st.session_state.message = result.message
+                    needs_rerun = True
+
+    if needs_rerun:
+        st.rerun()
 
 
 def render_board(engine: TetherChessEngine):
