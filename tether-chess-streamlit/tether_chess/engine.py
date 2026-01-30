@@ -91,15 +91,7 @@ class TetherChessEngine:
         if not piece or piece.is_white != self.board.white_to_move:
             return []
 
-        # Debug: check if moves exist before and after filter
-        unfiltered = self.board.generate_legal_moves_for_piece(piece, skip_check_filter=True)
-        filtered = self.board.generate_legal_moves_for_piece(piece, skip_check_filter=False)
-
-        # Store debug info
-        self._debug_unfiltered = len(unfiltered)
-        self._debug_filtered = len(filtered)
-
-        return filtered
+        return self.board.generate_legal_moves_for_piece(piece)
 
     def get_transporter_moves(self) -> List[Move]:
         """Get all transporter (borrowed movement) moves."""

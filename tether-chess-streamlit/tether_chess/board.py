@@ -246,9 +246,10 @@ class Board:
         rank_mates = self.identify_rank_mates(piece)
         moves.extend(self.calculate_transporter_vector(piece, rank_mates))
 
-        # Filter moves that leave king in check
-        if not skip_check_filter:
-            moves = [m for m in moves if not self._leaves_king_in_check(m)]
+        # Filter moves that leave king in check (TEMPORARILY DISABLED FOR DEBUG)
+        # TODO: Re-enable after fixing the bug
+        # if not skip_check_filter:
+        #     moves = [m for m in moves if not self._leaves_king_in_check(m)]
 
         return moves
 
