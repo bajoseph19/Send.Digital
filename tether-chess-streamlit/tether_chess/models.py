@@ -26,6 +26,16 @@ class PieceType(Enum):
         return self.white_unicode if is_white else self.black_unicode
 
 
+class GameMode(Enum):
+    """
+    Taxi Chess game modes:
+    - LINEAR: Pieces teleport to where rank-mates can go (destinations)
+    - QUANTUM: Pieces inherit rank-mates' movement abilities (patterns)
+    """
+    LINEAR = "Linear"
+    QUANTUM = "Quantum"
+
+
 @dataclass(frozen=True)
 class Position:
     """

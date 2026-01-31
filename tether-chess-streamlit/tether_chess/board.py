@@ -13,14 +13,14 @@ capabilities from Rank A allies. On the next turn, it gains new capabilities
 from any allies on Rank B. The entanglement is position-based, not persistent.
 """
 
-from typing import List, Optional, Dict, Tuple
-from .models import Position, PieceType, Piece, Move
+from typing import List, Optional, Dict, Tuple, Set
+from .models import Position, PieceType, Piece, Move, GameMode
 
 
 class Board:
     """Tether Chess board with Geometric Entanglement."""
 
-    def __init__(self):
+    def __init__(self, game_mode: GameMode = GameMode.LINEAR):
         self.squares: List[List[Optional[Piece]]] = [[None for _ in range(8)] for _ in range(8)]
         self.white_to_move: bool = True
         self.en_passant_target: Optional[Position] = None
@@ -29,6 +29,7 @@ class Board:
         self.black_can_castle_kingside: bool = True
         self.black_can_castle_queenside: bool = True
         self.move_history: List[Move] = []
+        self.game_mode: GameMode = game_mode  # LINEAR or QUANTUM
 
     def setup_starting_position(self):
         """Initialize board to standard starting position."""
@@ -110,29 +111,30 @@ class Board:
                                       piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
         STEP 2: calculateTransporterVector(piece, mates)
-        The moving piece can TELEPORT to any square that its rank-mates
-        can actually reach from THEIR current positions.
-
-        KEY RULES:
-        - Teleportation: Piece goes to where rank-mates CAN go (not borrowing pattern)
-        - Path Integrity: Rank-mate's path must be clear from THEIR position
-        - No Recursive Jumping: Each transporter move is marked (cannot chain)
+        Dispatches to LINEAR or QUANTUM mode based on game_mode.
         """
-        # Find the actual board position of the moving piece
+        if self.game_mode == GameMode.QUANTUM:
+            return self._calculate_quantum_transporter(piece, mates, piece_board_pos)
+        else:
+            return self._calculate_linear_transporter(piece, mates, piece_board_pos)
+
+    def _calculate_linear_transporter(self, piece: Piece, mates: List[Tuple[Piece, Position]],
+                                       piece_board_pos: Optional[Position] = None) -> List[Move]:
+        """
+        LINEAR MODE: Pieces TELEPORT to where rank-mates can go.
+        The moving piece goes to destinations reachable by rank-mates from THEIR positions.
+        """
         if piece_board_pos is None:
             piece_board_pos = self._find_piece_on_board(piece)
         if piece_board_pos is None:
             return []
 
         transporter_moves = []
-        seen_targets = set()  # Avoid duplicate moves to same square
+        seen_targets: Set[Position] = set()
 
         for mate, mate_origin in mates:
-            # mate_origin is the ACTUAL board position of the rank-mate
-
             for dx, dy, is_sliding in mate.get_native_movement_vectors():
                 if is_sliding:
-                    # Sliding piece: check path from MATE's actual position
                     for distance in range(1, 8):
                         target = mate_origin.offset(dx * distance, dy * distance)
                         if not target.is_valid():
@@ -140,14 +142,12 @@ class Board:
 
                         target_piece = self.get_piece_at(target)
 
-                        # Can't teleport to where the moving piece already is
                         if target == piece_board_pos:
                             if target_piece:
-                                break  # Path blocked by moving piece
+                                break
                             continue
 
                         if target_piece:
-                            # Can capture enemy piece (teleport and capture)
                             if target_piece.is_white != piece.is_white:
                                 if target not in seen_targets:
                                     move = self._create_transporter_move(
@@ -156,27 +156,23 @@ class Board:
                                     if move:
                                         transporter_moves.append(move)
                                         seen_targets.add(target)
-                            break  # Path blocked
+                            break
 
-                        # Empty square - can teleport there
                         if target not in seen_targets:
                             move = self._create_transporter_move(piece, piece_board_pos, target, mate, None)
                             if move:
                                 transporter_moves.append(move)
                                 seen_targets.add(target)
                 else:
-                    # Non-sliding (Knight, King): single jump from MATE's actual position
                     target = mate_origin.offset(dx, dy)
                     if not target.is_valid():
                         continue
 
-                    # Can't teleport to own position
                     if target == piece_board_pos:
                         continue
 
                     target_piece = self.get_piece_at(target)
 
-                    # Can't teleport onto friendly pieces (except self, handled above)
                     if target_piece and target_piece.is_white == piece.is_white:
                         continue
 
@@ -185,6 +181,72 @@ class Board:
                         if move:
                             transporter_moves.append(move)
                             seen_targets.add(target)
+
+        return transporter_moves
+
+    def _calculate_quantum_transporter(self, piece: Piece, mates: List[Tuple[Piece, Position]],
+                                        piece_board_pos: Optional[Position] = None) -> List[Move]:
+        """
+        QUANTUM MODE: Pieces INHERIT movement abilities of rank-mates.
+        The moving piece applies all rank-mates' movement patterns from ITS OWN position.
+        Then ALL pieces on the rank get the union of all these combined-ability moves.
+        """
+        if piece_board_pos is None:
+            piece_board_pos = self._find_piece_on_board(piece)
+        if piece_board_pos is None:
+            return []
+
+        transporter_moves = []
+        seen_targets: Set[Position] = set()
+
+        # Collect ALL movement vectors from ALL rank-mates (inherited abilities)
+        inherited_vectors: List[Tuple[int, int, bool, Piece]] = []
+        for mate, _ in mates:
+            for dx, dy, is_sliding in mate.get_native_movement_vectors():
+                inherited_vectors.append((dx, dy, is_sliding, mate))
+
+        # Apply inherited movement patterns from the MOVING PIECE's position
+        for dx, dy, is_sliding, source_mate in inherited_vectors:
+            if is_sliding:
+                for distance in range(1, 8):
+                    target = piece_board_pos.offset(dx * distance, dy * distance)
+                    if not target.is_valid():
+                        break
+
+                    target_piece = self.get_piece_at(target)
+
+                    if target_piece:
+                        if target_piece.is_white != piece.is_white:
+                            if target not in seen_targets:
+                                move = self._create_transporter_move(
+                                    piece, piece_board_pos, target, source_mate, target_piece
+                                )
+                                if move:
+                                    transporter_moves.append(move)
+                                    seen_targets.add(target)
+                        break  # Path blocked
+
+                    if target not in seen_targets:
+                        move = self._create_transporter_move(piece, piece_board_pos, target, source_mate, None)
+                        if move:
+                            transporter_moves.append(move)
+                            seen_targets.add(target)
+            else:
+                # Non-sliding (Knight L-jump, King step)
+                target = piece_board_pos.offset(dx, dy)
+                if not target.is_valid():
+                    continue
+
+                target_piece = self.get_piece_at(target)
+
+                if target_piece and target_piece.is_white == piece.is_white:
+                    continue
+
+                if target not in seen_targets:
+                    move = self._create_transporter_move(piece, piece_board_pos, target, source_mate, target_piece)
+                    if move:
+                        transporter_moves.append(move)
+                        seen_targets.add(target)
 
         return transporter_moves
 
