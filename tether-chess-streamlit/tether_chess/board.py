@@ -203,13 +203,13 @@ class Board:
             for y in range(8):
                 attacker = self.squares[x][y]
                 if attacker and attacker.is_white == by_white:
-                    if self._can_natively_reach(attacker, target):
+                    # Use board position (x,y) not piece.position for robustness
+                    if self._can_natively_reach_from(attacker, Position(x, y), target):
                         return True
         return False
 
-    def _can_natively_reach(self, piece: Piece, target: Position) -> bool:
-        """Check if a piece can natively reach a target (with path checking)."""
-        origin = piece.position
+    def _can_natively_reach_from(self, piece: Piece, origin: Position, target: Position) -> bool:
+        """Check if a piece can natively reach target from origin (with path checking)."""
 
         if piece.piece_type == PieceType.PAWN:
             direction = 1 if piece.is_white else -1

@@ -8,9 +8,11 @@
 ### 1. RANK ENTANGLEMENT (Geometric Entanglement)
 Every piece on a horizontal rank shares its movement potential with all friendly pieces on that same rank.
 
-**The Transporter:** Piece A can move to any square that Piece B (on the same rank) could legally reach, starting from Piece A's current position.
+**The Transporter:** Piece A can TELEPORT to any square that Piece B (on the same rank) can legally reach from Piece B's position. The moving piece goes WHERE its rank-mates CAN go.
 
-**Path Integrity:** If the "borrowed" move is a slide (Bishop/Rook/Queen), the path must be clear from the moving piece's origin.
+**Example:** Queen at d1 with Knights at b1 and g1 can teleport to a3, c3 (b1 Knight's reachable squares) or f3, h3 (g1 Knight's reachable squares).
+
+**Path Integrity:** For sliding rank-mates (Bishop/Rook/Queen), the path must be clear from the RANK-MATE's position, not the moving piece.
 
 ---
 
