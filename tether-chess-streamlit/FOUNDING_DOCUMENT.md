@@ -8,9 +8,11 @@
 ### 1. RANK ENTANGLEMENT (Geometric Entanglement)
 Every piece on a horizontal rank shares its movement potential with all friendly pieces on that same rank.
 
-**The Transporter:** Piece A can move to any square that Piece B (on the same rank) could legally reach, starting from Piece A's current position.
+**The Transporter:** Piece A can TELEPORT to any square that Piece B (on the same rank) can legally reach from Piece B's position. The moving piece goes WHERE its rank-mates CAN go.
 
-**Path Integrity:** If the "borrowed" move is a slide (Bishop/Rook/Queen), the path must be clear from the moving piece's origin.
+**Example:** Queen at d1 with Knights at b1 and g1 can teleport to a3, c3 (b1 Knight's reachable squares) or f3, h3 (g1 Knight's reachable squares).
+
+**Path Integrity:** For sliding rank-mates (Bishop/Rook/Queen), the path must be clear from the RANK-MATE's position, not the moving piece.
 
 ---
 
@@ -29,6 +31,8 @@ A piece can **only** deliver Check or Checkmate using its own **native** movemen
 A teleporting Rook landing next to a King does **NOT** check the King unless the King is on the Rook's horizontal or vertical axis.
 
 **You can fly across the board, but you must land in a position where your own soul (your native move) can strike.**
+
+**STEALTH CAPTURE PREVENTION:** While Check is only triggered by native attacks, the King is **forbidden** from moving into ANY square that can be attacked by enemy pieces - including squares reachable via transporter moves. The King must avoid all danger, not just direct lines of attack.
 
 ---
 
