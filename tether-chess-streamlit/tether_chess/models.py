@@ -26,14 +26,40 @@ class PieceType(Enum):
         return self.white_unicode if is_white else self.black_unicode
 
 
+class EntanglementAxis(Enum):
+    """The axis along which pieces share movement potential."""
+    RANK = "Rank"  # Horizontal (same row)
+    FILE = "File"  # Vertical (same column)
+
+
 class GameMode(Enum):
     """
-    Taxi Chess game modes:
-    - LINEAR: Pieces teleport to where rank-mates can go (destinations)
-    - QUANTUM: Pieces inherit rank-mates' movement abilities (patterns)
+    Taxi Chess game modes combining movement style and entanglement axis:
+
+    Movement Styles:
+    - LINEAR: Pieces TELEPORT to where tether-mates can go (destinations)
+    - QUANTUM: Pieces INHERIT tether-mates' movement abilities (patterns)
+
+    Entanglement Axes:
+    - RANK: Horizontal tethering (pieces on same row share abilities)
+    - FILE: Vertical tethering (pieces on same column share abilities)
     """
-    LINEAR = "Linear"
-    QUANTUM = "Quantum"
+    LINEAR_RANK = "Linear Rank"
+    QUANTUM_RANK = "Quantum Rank"
+    LINEAR_FILE = "Linear File"
+    QUANTUM_FILE = "Quantum File"
+
+    @property
+    def is_quantum(self) -> bool:
+        return self in (GameMode.QUANTUM_RANK, GameMode.QUANTUM_FILE)
+
+    @property
+    def is_file_based(self) -> bool:
+        return self in (GameMode.LINEAR_FILE, GameMode.QUANTUM_FILE)
+
+    @property
+    def axis(self) -> 'EntanglementAxis':
+        return EntanglementAxis.FILE if self.is_file_based else EntanglementAxis.RANK
 
 
 @dataclass(frozen=True)

@@ -83,7 +83,7 @@ st.markdown("""
 
 # Initialize session state
 if 'game_mode' not in st.session_state:
-    st.session_state.game_mode = GameMode.LINEAR
+    st.session_state.game_mode = GameMode.LINEAR_RANK
 
 if 'engine' not in st.session_state:
     st.session_state.engine = TetherChessEngine(game_mode=st.session_state.game_mode)
@@ -312,8 +312,9 @@ def main():
     engine = st.session_state.engine
 
     # Title reflects current mode
-    mode_name = "Linear" if st.session_state.game_mode == GameMode.LINEAR else "Quantum"
-    st.title(f"♞ {mode_name} Taxi Chess (Tal's Forest)")
+    style = "Linear" if not st.session_state.game_mode.is_quantum else "Quantum"
+    axis = "Horizontal" if not st.session_state.game_mode.is_file_based else "Vertical"
+    st.title(f"♞ {style} {axis} Taxi Chess (Tal's Forest)")
 
     # Layout
     col1, col2 = st.columns([2, 1])
@@ -363,20 +364,39 @@ def main():
         # Controls
         st.subheader("Controls")
 
-        # Game Mode Toggle
+        # Game Mode Selection - Two dimensions
         st.markdown("**🎮 Game Variant**")
-        mode_options = {"Linear Taxi Chess": GameMode.LINEAR, "Quantum Taxi Chess": GameMode.QUANTUM}
-        current_mode_name = "Linear Taxi Chess" if st.session_state.game_mode == GameMode.LINEAR else "Quantum Taxi Chess"
 
-        selected_mode_name = st.radio(
-            "Select mode:",
-            options=list(mode_options.keys()),
-            index=0 if st.session_state.game_mode == GameMode.LINEAR else 1,
+        # Movement Style: Linear vs Quantum
+        style_options = ["Linear", "Quantum"]
+        current_is_quantum = st.session_state.game_mode.is_quantum
+        selected_style = st.radio(
+            "Movement Style:",
+            options=style_options,
+            index=1 if current_is_quantum else 0,
             horizontal=True,
-            help="LINEAR: Teleport to rank-mates' destinations | QUANTUM: Inherit rank-mates' abilities"
+            help="LINEAR: Teleport to destinations | QUANTUM: Inherit abilities"
         )
 
-        new_mode = mode_options[selected_mode_name]
+        # Entanglement Axis: Horizontal vs Vertical
+        axis_options = ["Horizontal", "Vertical"]
+        current_is_file = st.session_state.game_mode.is_file_based
+        selected_axis = st.radio(
+            "Tether Direction:",
+            options=axis_options,
+            index=1 if current_is_file else 0,
+            horizontal=True,
+            help="HORIZONTAL: Same row shares | VERTICAL: Same column shares"
+        )
+
+        # Map selections to GameMode
+        mode_map = {
+            ("Linear", "Horizontal"): GameMode.LINEAR_RANK,
+            ("Quantum", "Horizontal"): GameMode.QUANTUM_RANK,
+            ("Linear", "Vertical"): GameMode.LINEAR_FILE,
+            ("Quantum", "Vertical"): GameMode.QUANTUM_FILE,
+        }
+        new_mode = mode_map[(selected_style, selected_axis)]
         mode_changed = new_mode != st.session_state.game_mode
 
         if st.button("🔄 New Game", use_container_width=True):
@@ -385,8 +405,7 @@ def main():
             st.session_state.engine.new_game()
             st.session_state.selected_square = None
             st.session_state.legal_moves_for_selected = []
-            mode_label = "LINEAR" if new_mode == GameMode.LINEAR else "QUANTUM"
-            st.session_state.message = f"New {mode_label} Taxi Chess game started!"
+            st.session_state.message = f"New {selected_style} {selected_axis} game started!"
             st.rerun()
 
         if mode_changed:
@@ -415,13 +434,19 @@ def main():
         if transporter_count > 0:
             st.info(f"🚀 Transporter moves: {transporter_count}")
 
-        # Rules
+        # Rules - dynamic based on current mode
         st.subheader("📜 The Four Rules")
 
-        with st.expander("1. Rank Entanglement", expanded=False):
-            st.markdown("""
-            Pieces on the same **horizontal rank** share movement potential.
-            A piece can borrow the movement pattern of any friendly piece on its rank.
+        # Get axis-specific terminology
+        is_vertical = st.session_state.game_mode.is_file_based
+        axis_name = "Vertical" if is_vertical else "Horizontal"
+        tether_type = "file" if is_vertical else "rank"
+        direction = "column" if is_vertical else "row"
+
+        with st.expander(f"1. {axis_name} Entanglement", expanded=False):
+            st.markdown(f"""
+            Pieces on the same **{direction}** share movement potential.
+            A piece can borrow the movement pattern of any friendly piece on its {tether_type}.
             """)
 
         with st.expander("2. Pawn-Knight Apex", expanded=False):
@@ -444,9 +469,9 @@ def main():
             """)
 
         with st.expander("The Disconnection", expanded=False):
-            st.markdown("""
-            When a piece moves to a new rank, it **immediately**
-            loses its old rank-mates and gains new ones.
+            st.markdown(f"""
+            When a piece moves to a new {tether_type}, it **immediately**
+            loses its old tether-mates and gains new ones.
             Your allies are determined by where you stand.
             """)
 
