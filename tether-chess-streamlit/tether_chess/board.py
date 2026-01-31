@@ -208,6 +208,73 @@ class Board:
                         return True
         return False
 
+    def is_under_any_attack(self, target: Position, by_white: bool) -> bool:
+        """
+        STEALTH CAPTURE PREVENTION:
+        Check if a position is under attack by ANY move (native OR transporter).
+
+        The King is forbidden from moving into any square that can be attacked
+        by any enemy piece, including squares reachable via Tethered/Borrowed moves.
+
+        This is different from Check detection, which only uses native attacks.
+        """
+        # First check native attacks (fast path)
+        if self.is_under_native_attack(target, by_white):
+            return True
+
+        # Now check transporter attacks:
+        # A piece can attack any square that its rank-mates can reach
+        for x in range(8):
+            for y in range(8):
+                piece = self.squares[x][y]
+                if piece and piece.is_white == by_white:
+                    # Find rank-mates for this piece
+                    piece_pos = Position(x, y)
+                    rank = y
+
+                    for mate_x in range(8):
+                        if mate_x == x:
+                            continue
+                        mate = self.squares[mate_x][rank]
+                        if mate and mate.is_white == by_white:
+                            # Check if mate can reach target from MATE's position
+                            mate_origin = Position(mate_x, rank)
+                            if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                                return True
+
+        return False
+
+    def _can_transporter_reach(self, mate: Piece, mate_origin: Position,
+                                target: Position, moving_piece_pos: Position) -> bool:
+        """
+        Check if a transporter move from mate's position can reach target.
+        The moving piece would teleport from moving_piece_pos to target via mate's movement.
+        """
+        for dx, dy, is_sliding in mate.get_native_movement_vectors():
+            if is_sliding:
+                for distance in range(1, 8):
+                    check_pos = mate_origin.offset(dx * distance, dy * distance)
+                    if not check_pos.is_valid():
+                        break
+
+                    if check_pos == target:
+                        return True
+
+                    # Skip the moving piece's own position (it would move away)
+                    if check_pos == moving_piece_pos:
+                        continue
+
+                    # Path blocked by another piece
+                    if self.get_piece_at(check_pos):
+                        break
+            else:
+                # Non-sliding: Knight, King - single jump
+                check_pos = mate_origin.offset(dx, dy)
+                if check_pos.is_valid() and check_pos == target:
+                    return True
+
+        return False
+
     def _can_natively_reach_from(self, piece: Piece, origin: Position, target: Position) -> bool:
         """Check if a piece can natively reach target from origin (with path checking)."""
 
@@ -381,29 +448,37 @@ class Board:
                 rook_pos = Position(7, origin.rank)
                 rook = self.get_piece_at(rook_pos)
                 if rook and rook.piece_type == PieceType.ROOK and not rook.has_moved:
+                    # STEALTH CAPTURE: King cannot pass through ANY attackable squares
                     if (not self.get_piece_at(origin.offset(1, 0)) and
                         not self.get_piece_at(origin.offset(2, 0)) and
-                        not self.is_under_native_attack(origin, not king.is_white) and
-                        not self.is_under_native_attack(origin.offset(1, 0), not king.is_white) and
-                        not self.is_under_native_attack(origin.offset(2, 0), not king.is_white)):
+                        not self.is_under_any_attack(origin, not king.is_white) and
+                        not self.is_under_any_attack(origin.offset(1, 0), not king.is_white) and
+                        not self.is_under_any_attack(origin.offset(2, 0), not king.is_white)):
                         moves.append(Move(origin, origin.offset(2, 0), king, is_castling=True))
 
             if can_qs:
                 rook_pos = Position(0, origin.rank)
                 rook = self.get_piece_at(rook_pos)
                 if rook and rook.piece_type == PieceType.ROOK and not rook.has_moved:
+                    # STEALTH CAPTURE: King cannot pass through ANY attackable squares
                     if (not self.get_piece_at(origin.offset(-1, 0)) and
                         not self.get_piece_at(origin.offset(-2, 0)) and
                         not self.get_piece_at(origin.offset(-3, 0)) and
-                        not self.is_under_native_attack(origin, not king.is_white) and
-                        not self.is_under_native_attack(origin.offset(-1, 0), not king.is_white) and
-                        not self.is_under_native_attack(origin.offset(-2, 0), not king.is_white)):
+                        not self.is_under_any_attack(origin, not king.is_white) and
+                        not self.is_under_any_attack(origin.offset(-1, 0), not king.is_white) and
+                        not self.is_under_any_attack(origin.offset(-2, 0), not king.is_white)):
                         moves.append(Move(origin, origin.offset(-2, 0), king, is_castling=True))
 
         return moves
 
     def _leaves_king_in_check(self, move: Move) -> bool:
-        """Check if a move leaves the moving side's king in check."""
+        """
+        Check if a move leaves the moving side's king in check.
+
+        STEALTH CAPTURE RULE:
+        - For King moves: Check is_under_any_attack (native + transporter)
+        - For other pieces: Check is_under_native_attack only (standard chess check)
+        """
         # Make move temporarily
         piece = move.piece
         from_pos = move.from_pos
@@ -424,7 +499,16 @@ class Board:
 
         # Find king and check
         king_pos = self.find_king(piece.is_white)
-        in_check = self.is_under_native_attack(king_pos, not piece.is_white) if king_pos else False
+
+        if king_pos:
+            if piece.piece_type == PieceType.KING:
+                # STEALTH CAPTURE: King cannot move to ANY attackable square
+                in_danger = self.is_under_any_attack(king_pos, not piece.is_white)
+            else:
+                # Other pieces: standard check detection (native attacks only)
+                in_danger = self.is_under_native_attack(king_pos, not piece.is_white)
+        else:
+            in_danger = False
 
         # Unmake move
         self.squares[from_pos.x][from_pos.y] = piece
@@ -435,7 +519,7 @@ class Board:
             ep_pos = Position(to_pos.x, from_pos.y)
             self.squares[ep_pos.x][ep_pos.y] = ep_captured
 
-        return in_check
+        return in_danger
 
     def find_king(self, is_white: bool) -> Optional[Position]:
         """Find the king of a given color. Returns its actual board position."""

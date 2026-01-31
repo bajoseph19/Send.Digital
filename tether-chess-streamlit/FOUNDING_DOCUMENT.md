@@ -32,6 +32,8 @@ A teleporting Rook landing next to a King does **NOT** check the King unless the
 
 **You can fly across the board, but you must land in a position where your own soul (your native move) can strike.**
 
+**STEALTH CAPTURE PREVENTION:** While Check is only triggered by native attacks, the King is **forbidden** from moving into ANY square that can be attacked by enemy pieces - including squares reachable via transporter moves. The King must avoid all danger, not just direct lines of attack.
+
 ---
 
 ### 4. NO RECURSIVE JUMPING
