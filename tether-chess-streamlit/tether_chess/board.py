@@ -70,27 +70,44 @@ class Board:
     # TETHER CHESS CORE ALGORITHM: The Three Checks
     # ========================================================================
 
-    def identify_rank_mates(self, piece: Piece) -> List[Piece]:
+    def _find_piece_on_board(self, piece: Piece) -> Optional[Position]:
+        """Find the actual board position of a piece by scanning the board."""
+        for x in range(8):
+            for y in range(8):
+                if self.squares[x][y] is piece:
+                    return Position(x, y)
+        return None
+
+    def identify_rank_mates(self, piece: Piece, piece_board_pos: Optional[Position] = None) -> List[Tuple[Piece, Position]]:
         """
         STEP 1: identifyRankMates(piece)
         Scans the current y-axis (rank) for friendly units.
+        Returns list of (piece, actual_board_position) tuples.
 
-        THE DISCONNECTION: This uses the piece's CURRENT position.
+        THE DISCONNECTION: This uses the piece's CURRENT position on the board.
         When a piece moves from Rank 3 to Rank 4:
         - It NO LONGER has access to Rank 3 allies' movement
         - It NOW has access to any Rank 4 allies' movement
         """
+        # Find the actual board position of the piece
+        if piece_board_pos is None:
+            piece_board_pos = self._find_piece_on_board(piece)
+        if piece_board_pos is None:
+            return []
+
+        rank = piece_board_pos.y
         rank_mates = []
-        rank = piece.position.rank
 
         for x in range(8):
             other = self.squares[x][rank]
             if other and other is not piece and other.is_white == piece.is_white:
-                rank_mates.append(other)
+                # Return both the piece and its ACTUAL board position
+                rank_mates.append((other, Position(x, rank)))
 
         return rank_mates
 
-    def calculate_transporter_vector(self, piece: Piece, mates: List[Piece]) -> List[Move]:
+    def calculate_transporter_vector(self, piece: Piece, mates: List[Tuple[Piece, Position]],
+                                      piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
         STEP 2: calculateTransporterVector(piece, mates)
         The moving piece can TELEPORT to any square that its rank-mates
@@ -101,15 +118,21 @@ class Board:
         - Path Integrity: Rank-mate's path must be clear from THEIR position
         - No Recursive Jumping: Each transporter move is marked (cannot chain)
         """
+        # Find the actual board position of the moving piece
+        if piece_board_pos is None:
+            piece_board_pos = self._find_piece_on_board(piece)
+        if piece_board_pos is None:
+            return []
+
         transporter_moves = []
         seen_targets = set()  # Avoid duplicate moves to same square
 
-        for mate in mates:
-            mate_origin = mate.position
+        for mate, mate_origin in mates:
+            # mate_origin is the ACTUAL board position of the rank-mate
 
             for dx, dy, is_sliding in mate.get_native_movement_vectors():
                 if is_sliding:
-                    # Sliding piece: check path from MATE's position
+                    # Sliding piece: check path from MATE's actual position
                     for distance in range(1, 8):
                         target = mate_origin.offset(dx * distance, dy * distance)
                         if not target.is_valid():
@@ -118,7 +141,7 @@ class Board:
                         target_piece = self.get_piece_at(target)
 
                         # Can't teleport to where the moving piece already is
-                        if target == piece.position:
+                        if target == piece_board_pos:
                             if target_piece:
                                 break  # Path blocked by moving piece
                             continue
@@ -128,7 +151,7 @@ class Board:
                             if target_piece.is_white != piece.is_white:
                                 if target not in seen_targets:
                                     move = self._create_transporter_move(
-                                        piece, target, mate, target_piece
+                                        piece, piece_board_pos, target, mate, target_piece
                                     )
                                     if move:
                                         transporter_moves.append(move)
@@ -137,18 +160,18 @@ class Board:
 
                         # Empty square - can teleport there
                         if target not in seen_targets:
-                            move = self._create_transporter_move(piece, target, mate, None)
+                            move = self._create_transporter_move(piece, piece_board_pos, target, mate, None)
                             if move:
                                 transporter_moves.append(move)
                                 seen_targets.add(target)
                 else:
-                    # Non-sliding (Knight, King): single jump from MATE's position
+                    # Non-sliding (Knight, King): single jump from MATE's actual position
                     target = mate_origin.offset(dx, dy)
                     if not target.is_valid():
                         continue
 
                     # Can't teleport to own position
-                    if target == piece.position:
+                    if target == piece_board_pos:
                         continue
 
                     target_piece = self.get_piece_at(target)
@@ -158,7 +181,7 @@ class Board:
                         continue
 
                     if target not in seen_targets:
-                        move = self._create_transporter_move(piece, target, mate, target_piece)
+                        move = self._create_transporter_move(piece, piece_board_pos, target, mate, target_piece)
                         if move:
                             transporter_moves.append(move)
                             seen_targets.add(target)
@@ -166,7 +189,7 @@ class Board:
         return transporter_moves
 
     def _create_transporter_move(
-        self, piece: Piece, target: Position, mate: Piece, captured: Optional[Piece]
+        self, piece: Piece, from_pos: Position, target: Position, mate: Piece, captured: Optional[Piece]
     ) -> Optional[Move]:
         """Create a transporter move, handling Pawn-Knight Apex promotion."""
         promotion_type = None
@@ -176,7 +199,7 @@ class Board:
             promotion_type = PieceType.QUEEN  # Default to Queen
 
         return Move(
-            from_pos=piece.position,
+            from_pos=from_pos,
             to_pos=target,
             piece=piece,
             captured_piece=captured,
@@ -321,20 +344,31 @@ class Board:
             for y in range(8):
                 piece = self.squares[x][y]
                 if piece and piece.is_white == self.white_to_move:
-                    all_moves.extend(self.generate_legal_moves_for_piece(piece))
+                    # Pass actual board position to avoid redundant lookup
+                    all_moves.extend(self.generate_legal_moves_for_piece(
+                        piece, piece_board_pos=Position(x, y)
+                    ))
 
         return all_moves
 
-    def generate_legal_moves_for_piece(self, piece: Piece, skip_check_filter: bool = False) -> List[Move]:
+    def generate_legal_moves_for_piece(self, piece: Piece, skip_check_filter: bool = False,
+                                         piece_board_pos: Optional[Position] = None) -> List[Move]:
         """Generate all legal moves for a specific piece."""
+        # Find the actual board position
+        if piece_board_pos is None:
+            piece_board_pos = self._find_piece_on_board(piece)
+        if piece_board_pos is None:
+            return []
+
         moves = []
 
-        # Native moves
-        moves.extend(self._generate_native_moves(piece))
+        # Native moves (pass board position for consistency)
+        moves.extend(self._generate_native_moves(piece, piece_board_pos))
 
         # Transporter moves (Geometric Entanglement)
-        rank_mates = self.identify_rank_mates(piece)
-        moves.extend(self.calculate_transporter_vector(piece, rank_mates))
+        # identify_rank_mates returns List[Tuple[Piece, Position]] with actual board positions
+        rank_mates = self.identify_rank_mates(piece, piece_board_pos)
+        moves.extend(self.calculate_transporter_vector(piece, rank_mates, piece_board_pos))
 
         # Filter moves that leave king in check (standard chess legality)
         if not skip_check_filter:
@@ -346,15 +380,19 @@ class Board:
 
         return moves
 
-    def _generate_native_moves(self, piece: Piece) -> List[Move]:
+    def _generate_native_moves(self, piece: Piece, origin: Optional[Position] = None) -> List[Move]:
         """Generate native (non-transporter) moves."""
         moves = []
-        origin = piece.position
+        # Use provided origin or find it on the board
+        if origin is None:
+            origin = self._find_piece_on_board(piece)
+        if origin is None:
+            return []
 
         if piece.piece_type == PieceType.PAWN:
-            moves.extend(self._generate_pawn_moves(piece))
+            moves.extend(self._generate_pawn_moves(piece, origin))
         elif piece.piece_type == PieceType.KING:
-            moves.extend(self._generate_king_moves(piece))
+            moves.extend(self._generate_king_moves(piece, origin))
         else:
             for dx, dy, is_sliding in piece.get_native_movement_vectors():
                 if is_sliding:
@@ -380,10 +418,14 @@ class Board:
 
         return moves
 
-    def _generate_pawn_moves(self, pawn: Piece) -> List[Move]:
+    def _generate_pawn_moves(self, pawn: Piece, origin: Optional[Position] = None) -> List[Move]:
         """Generate pawn moves."""
         moves = []
-        origin = pawn.position
+        if origin is None:
+            origin = self._find_piece_on_board(pawn)
+        if origin is None:
+            return []
+
         direction = 1 if pawn.is_white else -1
         start_rank = 1 if pawn.is_white else 6
 
@@ -424,10 +466,13 @@ class Board:
 
         return moves
 
-    def _generate_king_moves(self, king: Piece) -> List[Move]:
+    def _generate_king_moves(self, king: Piece, origin: Optional[Position] = None) -> List[Move]:
         """Generate king moves including castling."""
         moves = []
-        origin = king.position
+        if origin is None:
+            origin = self._find_piece_on_board(king)
+        if origin is None:
+            return []
 
         # Normal moves
         for dx, dy, _ in king.get_native_movement_vectors():
