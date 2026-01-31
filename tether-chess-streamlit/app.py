@@ -399,8 +399,8 @@ def main():
 
         michael_tal = engine.get_michael_tal_opening_moves()
         if michael_tal:
-            st.success(f"🎯 Michael Tal Opening: {len(michael_tal)} moves!")
-            with st.expander("Show Michael Tal moves"):
+            st.success(f"🎯 Mikhal Tal Opening: {len(michael_tal)} moves!")
+            with st.expander("Show Mikhal Tal moves"):
                 for move in michael_tal:
                     st.write(f"• {move.to_notation()}")
 
@@ -416,7 +416,7 @@ def main():
             st.info(f"🚀 Transporter moves: {transporter_count}")
 
         # Rules
-        st.subheader("📜 The Four Rules")
+        st.subheader("📜 The Five Rules")
 
         with st.expander("1. Rank Entanglement", expanded=False):
             st.markdown("""
@@ -459,3 +459,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
