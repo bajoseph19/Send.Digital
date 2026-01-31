@@ -187,9 +187,12 @@ class Board:
     def _calculate_quantum_transporter(self, piece: Piece, mates: List[Tuple[Piece, Position]],
                                         piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
-        QUANTUM MODE: Pieces INHERIT movement abilities of rank-mates.
-        The moving piece applies all rank-mates' movement patterns from ITS OWN position.
-        Then ALL pieces on the rank get the union of all these combined-ability moves.
+        QUANTUM MODE: All pieces on a rank inherit ALL abilities from each other.
+
+        Algorithm:
+        1. Collect combined movement vectors from ALL pieces on the rank (including moving piece)
+        2. For EACH piece position on the rank, calculate reachable squares using combined abilities
+        3. The UNION of all reachable squares is available to the moving piece
         """
         if piece_board_pos is None:
             piece_board_pos = self._find_piece_on_board(piece)
@@ -199,54 +202,82 @@ class Board:
         transporter_moves = []
         seen_targets: Set[Position] = set()
 
-        # Collect ALL movement vectors from ALL rank-mates (inherited abilities)
-        inherited_vectors: List[Tuple[int, int, bool, Piece]] = []
+        # Step 1: Collect ALL movement vectors from ALL pieces on the rank (combined abilities)
+        all_vectors: Set[Tuple[int, int, bool]] = set()
+
+        # Add moving piece's native vectors
+        for dx, dy, is_sliding in piece.get_native_movement_vectors():
+            all_vectors.add((dx, dy, is_sliding))
+
+        # Add all rank-mates' vectors
         for mate, _ in mates:
             for dx, dy, is_sliding in mate.get_native_movement_vectors():
-                inherited_vectors.append((dx, dy, is_sliding, mate))
+                all_vectors.add((dx, dy, is_sliding))
 
-        # Apply inherited movement patterns from the MOVING PIECE's position
-        for dx, dy, is_sliding, source_mate in inherited_vectors:
-            if is_sliding:
-                for distance in range(1, 8):
-                    target = piece_board_pos.offset(dx * distance, dy * distance)
-                    if not target.is_valid():
-                        break
+        # All pieces on the rank (including moving piece)
+        all_rank_pieces: List[Tuple[Piece, Position]] = [(piece, piece_board_pos)] + mates
 
-                    target_piece = self.get_piece_at(target)
+        # Step 2: For EACH piece position, calculate reachable squares using combined abilities
+        for source_piece, source_pos in all_rank_pieces:
+            for dx, dy, is_sliding in all_vectors:
+                if is_sliding:
+                    for distance in range(1, 8):
+                        target = source_pos.offset(dx * distance, dy * distance)
+                        if not target.is_valid():
+                            break
 
-                    if target_piece:
-                        if target_piece.is_white != piece.is_white:
+                        # Skip if target is the moving piece's current position
+                        if target == piece_board_pos:
+                            continue
+
+                        target_piece = self.get_piece_at(target)
+
+                        # Skip friendly pieces (can't land on them)
+                        if target_piece and target_piece.is_white == piece.is_white:
+                            break  # Path blocked by friendly
+
+                        if target_piece:
+                            # Can capture enemy
                             if target not in seen_targets:
                                 move = self._create_transporter_move(
-                                    piece, piece_board_pos, target, source_mate, target_piece
+                                    piece, piece_board_pos, target, source_piece, target_piece
                                 )
                                 if move:
                                     transporter_moves.append(move)
                                     seen_targets.add(target)
-                        break  # Path blocked
+                            break  # Path blocked
+
+                        # Empty square
+                        if target not in seen_targets:
+                            move = self._create_transporter_move(
+                                piece, piece_board_pos, target, source_piece, None
+                            )
+                            if move:
+                                transporter_moves.append(move)
+                                seen_targets.add(target)
+                else:
+                    # Non-sliding (Knight L-jump, King step)
+                    target = source_pos.offset(dx, dy)
+                    if not target.is_valid():
+                        continue
+
+                    # Skip moving piece's own position
+                    if target == piece_board_pos:
+                        continue
+
+                    target_piece = self.get_piece_at(target)
+
+                    # Skip friendly pieces
+                    if target_piece and target_piece.is_white == piece.is_white:
+                        continue
 
                     if target not in seen_targets:
-                        move = self._create_transporter_move(piece, piece_board_pos, target, source_mate, None)
+                        move = self._create_transporter_move(
+                            piece, piece_board_pos, target, source_piece, target_piece
+                        )
                         if move:
                             transporter_moves.append(move)
                             seen_targets.add(target)
-            else:
-                # Non-sliding (Knight L-jump, King step)
-                target = piece_board_pos.offset(dx, dy)
-                if not target.is_valid():
-                    continue
-
-                target_piece = self.get_piece_at(target)
-
-                if target_piece and target_piece.is_white == piece.is_white:
-                    continue
-
-                if target not in seen_targets:
-                    move = self._create_transporter_move(piece, piece_board_pos, target, source_mate, target_piece)
-                    if move:
-                        transporter_moves.append(move)
-                        seen_targets.add(target)
 
         return transporter_moves
 
