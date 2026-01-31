@@ -56,14 +56,14 @@ class MoveResult:
 class TetherChessEngine:
     """Main orchestrator for Tether Chess."""
 
-    def __init__(self, game_mode: GameMode = GameMode.LINEAR):
+    def __init__(self, game_mode: GameMode = GameMode.LINEAR_RANK):
         self.game_mode = game_mode
         self.board = Board(game_mode=game_mode)
         self.game_state = GameState.ONGOING
         self.game_log: List[str] = []
 
     def set_game_mode(self, mode: GameMode):
-        """Change the game mode (LINEAR or QUANTUM)."""
+        """Change the game mode (LINEAR/QUANTUM × RANK/FILE)."""
         self.game_mode = mode
         self.board.game_mode = mode
 
@@ -78,19 +78,33 @@ class TetherChessEngine:
         self.game_state = GameState.ONGOING
         self.game_log.clear()
 
-        mode_name = "LINEAR" if self.game_mode == GameMode.LINEAR else "QUANTUM"
-        self.game_log.append(f"=== {mode_name} TAXI CHESS (Tal's Forest) ===")
+        # Build mode description
+        style = "LINEAR" if not self.game_mode.is_quantum else "QUANTUM"
+        axis = "RANK" if not self.game_mode.is_file_based else "FILE"
+        tether_type = "rank-mates" if not self.game_mode.is_file_based else "file-mates"
+
+        self.game_log.append(f"=== {style} {axis} TAXI CHESS (Tal's Forest) ===")
         self.game_log.append("Game started. White to move.")
         self.game_log.append("")
-        if self.game_mode == GameMode.LINEAR:
-            self.game_log.append("LINEAR MODE: Pieces TELEPORT to rank-mates' destinations")
+
+        if self.game_mode.is_quantum:
+            self.game_log.append(f"QUANTUM MODE: Pieces INHERIT {tether_type}' movement abilities")
         else:
-            self.game_log.append("QUANTUM MODE: Pieces INHERIT rank-mates' movement abilities")
+            self.game_log.append(f"LINEAR MODE: Pieces TELEPORT to {tether_type}' destinations")
+
+        axis_desc = "horizontal (same row)" if not self.game_mode.is_file_based else "vertical (same column)"
+        self.game_log.append(f"ENTANGLEMENT AXIS: {axis} - {axis_desc}")
         self.game_log.append("")
-        self.game_log.append("FOUR UNIQUE RULES:")
-        self.game_log.append("1. Rank Entanglement - Pieces share movement with rank-mates")
+        self.game_log.append("RULES:")
+        self.game_log.append(f"1. {axis} Entanglement - Pieces share movement with {tether_type}")
         self.game_log.append("2. Pawn-Knight Apex - Pawn + Knight jump to 8th = instant promotion")
-        self.game_log.append("3. Native Lethality - Only native moves can deliver check")
+
+        # Rule 3 differs between Linear and Quantum
+        if self.game_mode.is_quantum:
+            self.game_log.append("3. TETHER LETHALITY - Tether threats deliver check (Native Lethality OFF)")
+        else:
+            self.game_log.append("3. Native Lethality - Only native moves can deliver check")
+
         self.game_log.append("4. No Recursive Jumping - One teleport per turn maximum")
         self.game_log.append("")
 
@@ -287,14 +301,21 @@ class TetherChessEngine:
 
         return checking_moves
 
-    def get_rank_mates_positions(self, piece_position: Position) -> List[Position]:
-        """Get positions of rank-mates for a piece (for UI highlighting)."""
+    def get_tether_mates_positions(self, piece_position: Position) -> List[Position]:
+        """Get positions of tether-mates for a piece (for UI highlighting).
+        Returns rank-mates or file-mates based on current game mode.
+        """
         piece = self.board.get_piece_at(piece_position)
         if not piece:
             return []
 
-        # identify_rank_mates now returns List[Tuple[Piece, Position]]
-        return [pos for _, pos in self.board.identify_rank_mates(piece, piece_position)]
+        # identify_tether_mates returns List[Tuple[Piece, Position]] based on game mode
+        return [pos for _, pos in self.board.identify_tether_mates(piece, piece_position)]
+
+    # Backwards compatibility alias
+    def get_rank_mates_positions(self, piece_position: Position) -> List[Position]:
+        """Alias for get_tether_mates_positions (backwards compatibility)."""
+        return self.get_tether_mates_positions(piece_position)
 
     # ========================================================================
     # Getters

@@ -2,19 +2,21 @@
 Tether Chess Board - implements the Geometric Entanglement system.
 
 FOUR UNIQUE RULES OF TETHER CHESS (Tal's Forest):
-1. RANK ENTANGLEMENT: Pieces on the same horizontal rank share movement potential
+1. GEOMETRIC ENTANGLEMENT: Pieces on the same rank OR file share movement potential
 2. INSTANT PAWN PROMOTION: Pawn using Knight's L-jump to 8th rank promotes immediately
 3. NATIVE LETHALITY: Only native movement can deliver check/checkmate
 4. NO RECURSIVE JUMPING: Cannot chain borrowed moves (one teleport per turn)
 
 THE DISCONNECTION:
-When a piece moves from Rank A to Rank B, it IMMEDIATELY loses all borrowed
-capabilities from Rank A allies. On the next turn, it gains new capabilities
-from any allies on Rank B. The entanglement is position-based, not persistent.
+When a piece moves, it IMMEDIATELY loses all borrowed capabilities from old
+tether-mates. On the next turn, it gains new capabilities from any new tether-mates.
+The entanglement is position-based, not persistent.
 
-GAME MODES:
-- LINEAR: Pieces teleport to destinations their rank-mates can reach
-- QUANTUM: All pieces share combined abilities; each position calculates moves with union of all abilities
+GAME MODES (4 variants):
+- LINEAR_RANK: Teleport to rank-mates' destinations (horizontal tethering)
+- QUANTUM_RANK: Inherit rank-mates' abilities, union of all moves (horizontal)
+- LINEAR_FILE: Teleport to file-mates' destinations (vertical tethering)
+- QUANTUM_FILE: Inherit file-mates' abilities, union of all moves (vertical)
 """
 
 from typing import List, Optional, Dict, Tuple, Set
@@ -24,7 +26,7 @@ from .models import Position, PieceType, Piece, Move, GameMode
 class Board:
     """Tether Chess board with Geometric Entanglement."""
 
-    def __init__(self, game_mode: GameMode = GameMode.LINEAR):
+    def __init__(self, game_mode: GameMode = GameMode.LINEAR_RANK):
         self.squares: List[List[Optional[Piece]]] = [[None for _ in range(8)] for _ in range(8)]
         self.white_to_move: bool = True
         self.en_passant_target: Optional[Position] = None
@@ -33,7 +35,7 @@ class Board:
         self.black_can_castle_kingside: bool = True
         self.black_can_castle_queenside: bool = True
         self.move_history: List[Move] = []
-        self.game_mode: GameMode = game_mode  # LINEAR or QUANTUM
+        self.game_mode: GameMode = game_mode  # LINEAR/QUANTUM × RANK/FILE
 
     def setup_starting_position(self):
         """Initialize board to standard starting position."""
@@ -111,13 +113,47 @@ class Board:
 
         return rank_mates
 
+    def identify_file_mates(self, piece: Piece, piece_board_pos: Optional[Position] = None) -> List[Tuple[Piece, Position]]:
+        """
+        Scans the current x-axis (file) for friendly units.
+        Returns list of (piece, actual_board_position) tuples.
+
+        FILE ENTANGLEMENT: Pieces on the same vertical file share movement potential.
+        This creates very different tactical dynamics than rank entanglement.
+        """
+        if piece_board_pos is None:
+            piece_board_pos = self._find_piece_on_board(piece)
+        if piece_board_pos is None:
+            return []
+
+        file = piece_board_pos.x
+        file_mates = []
+
+        for y in range(8):
+            other = self.squares[file][y]
+            if other and other is not piece and other.is_white == piece.is_white:
+                file_mates.append((other, Position(file, y)))
+
+        return file_mates
+
+    def identify_tether_mates(self, piece: Piece, piece_board_pos: Optional[Position] = None) -> List[Tuple[Piece, Position]]:
+        """
+        Unified method to identify tether-mates based on current game mode.
+        Dispatches to rank-mates or file-mates based on entanglement axis.
+        """
+        if self.game_mode.is_file_based:
+            return self.identify_file_mates(piece, piece_board_pos)
+        else:
+            return self.identify_rank_mates(piece, piece_board_pos)
+
     def calculate_transporter_vector(self, piece: Piece, mates: List[Tuple[Piece, Position]],
                                       piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
         STEP 2: calculateTransporterVector(piece, mates)
         Dispatches to LINEAR or QUANTUM mode based on game_mode.
+        Works for both RANK and FILE entanglement axes.
         """
-        if self.game_mode == GameMode.QUANTUM:
+        if self.game_mode.is_quantum:
             return self._calculate_quantum_transporter(piece, mates, piece_board_pos)
         else:
             return self._calculate_linear_transporter(piece, mates, piece_board_pos)
@@ -125,8 +161,9 @@ class Board:
     def _calculate_linear_transporter(self, piece: Piece, mates: List[Tuple[Piece, Position]],
                                        piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
-        LINEAR MODE: Pieces TELEPORT to where rank-mates can go.
-        The moving piece goes to destinations reachable by rank-mates from THEIR positions.
+        LINEAR MODE: Pieces TELEPORT to where tether-mates can go.
+        The moving piece goes to destinations reachable by tether-mates from THEIR positions.
+        Works with both rank-mates (horizontal) and file-mates (vertical).
         """
         if piece_board_pos is None:
             piece_board_pos = self._find_piece_on_board(piece)
@@ -191,12 +228,14 @@ class Board:
     def _calculate_quantum_transporter(self, piece: Piece, mates: List[Tuple[Piece, Position]],
                                         piece_board_pos: Optional[Position] = None) -> List[Move]:
         """
-        QUANTUM MODE: All pieces on a rank inherit ALL abilities from each other.
+        QUANTUM MODE: All tethered pieces inherit ALL abilities from each other.
 
         Algorithm:
-        1. Collect combined movement vectors from ALL pieces on the rank (including moving piece)
-        2. For EACH piece position on the rank, calculate reachable squares using combined abilities
+        1. Collect combined movement vectors from ALL pieces on the tether (including moving piece)
+        2. For EACH piece position on the tether, calculate reachable squares using combined abilities
         3. The UNION of all reachable squares is available to the moving piece
+
+        Works with both rank-mates (horizontal) and file-mates (vertical).
         """
         if piece_board_pos is None:
             piece_board_pos = self._find_piece_on_board(piece)
@@ -310,12 +349,28 @@ class Board:
         """
         STEP 3: validateLethality(piece, position, enemyKingPosition)
 
-        NATIVE LETHALITY RULE:
-        A piece can only deliver check using its own native movement.
-        A teleporting Rook next to a King does NOT check unless
-        the King is on the Rook's file or rank.
+        LINEAR MODE - NATIVE LETHALITY RULE:
+            A piece can only deliver check using its own native movement.
+            A teleporting Rook next to a King does NOT check unless
+            the King is on the Rook's file or rank.
+
+        QUANTUM MODE - TETHER LETHALITY:
+            Native Lethality is removed. Any piece that can reach the King
+            via native OR tethered abilities delivers check.
         """
-        return piece.can_natively_attack(piece_position, enemy_king_position)
+        # Native attack always counts
+        if piece.can_natively_attack(piece_position, enemy_king_position):
+            return True
+
+        # In Quantum mode, tethered attacks also count as lethal
+        if self.game_mode.is_quantum:
+            # Check if piece can attack king via tethered abilities
+            tether_mates = self.identify_tether_mates(piece, piece_position)
+            for mate, _ in tether_mates:
+                if mate.can_natively_attack(piece_position, enemy_king_position):
+                    return True
+
+        return False
 
     def is_under_native_attack(self, target: Position, by_white: bool) -> bool:
         """Check if a position is under attack by native movement only."""
@@ -330,36 +385,37 @@ class Board:
 
     def is_under_any_attack(self, target: Position, by_white: bool) -> bool:
         """
-        STEALTH CAPTURE PREVENTION:
         Check if a position is under attack by ANY move (native OR transporter).
 
-        The King is forbidden from moving into any square that can be attacked
-        by any enemy piece, including squares reachable via Tethered/Borrowed moves.
+        Used for:
+        - STEALTH CAPTURE PREVENTION: King can't move to attackable squares
+        - QUANTUM CHECK DETECTION: Tether threats deliver check
 
-        This is different from Check detection, which only uses native attacks.
+        In Quantum mode, this determines check. In Linear mode, only used for King safety.
         """
         # First check native attacks (fast path)
         if self.is_under_native_attack(target, by_white):
             return True
 
-        # Now check transporter attacks:
-        # A piece can attack any square that its rank-mates can reach
+        # Now check transporter attacks based on game mode's entanglement axis
         for x in range(8):
             for y in range(8):
                 piece = self.squares[x][y]
                 if piece and piece.is_white == by_white:
-                    # Find rank-mates for this piece
                     piece_pos = Position(x, y)
-                    rank = y
 
-                    for mate_x in range(8):
-                        if mate_x == x:
-                            continue
-                        mate = self.squares[mate_x][rank]
-                        if mate and mate.is_white == by_white:
-                            # Check if mate can reach target from MATE's position
-                            mate_origin = Position(mate_x, rank)
-                            if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                    # Get tether-mates based on game mode (rank or file)
+                    tether_mates = self.identify_tether_mates(piece, piece_pos)
+
+                    for mate, mate_origin in tether_mates:
+                        # LINEAR: Check if mate can reach target from mate's position
+                        if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                            return True
+
+                        # QUANTUM: Also check if piece can reach target using mate's abilities
+                        # from the PIECE's position (inherited abilities)
+                        if self.game_mode.is_quantum:
+                            if self._can_transporter_reach(mate, piece_pos, target, piece_pos):
                                 return True
 
         return False
@@ -463,9 +519,9 @@ class Board:
         moves.extend(self._generate_native_moves(piece, piece_board_pos))
 
         # Transporter moves (Geometric Entanglement)
-        # identify_rank_mates returns List[Tuple[Piece, Position]] with actual board positions
-        rank_mates = self.identify_rank_mates(piece, piece_board_pos)
-        moves.extend(self.calculate_transporter_vector(piece, rank_mates, piece_board_pos))
+        # identify_tether_mates returns List[Tuple[Piece, Position]] based on game mode axis
+        tether_mates = self.identify_tether_mates(piece, piece_board_pos)
+        moves.extend(self.calculate_transporter_vector(piece, tether_mates, piece_board_pos))
 
         # Filter moves that leave king in check (standard chess legality)
         if not skip_check_filter:
@@ -745,9 +801,28 @@ class Board:
         self.white_to_move = not self.white_to_move
 
     def is_in_check(self) -> bool:
-        """Check if the current side is in check."""
+        """
+        Check if the current side is in check.
+
+        LINEAR MODE (Native Lethality):
+            Only native moves can deliver check. A piece teleporting next to
+            the King doesn't check unless its native movement threatens the King.
+
+        QUANTUM MODE (Tether Check):
+            Native Lethality is REMOVED. If any piece on a tether can attack
+            the King using their combined/inherited abilities, that's check.
+            The tether itself creates the threat.
+        """
         king_pos = self.find_king(self.white_to_move)
-        return self.is_under_native_attack(king_pos, not self.white_to_move) if king_pos else False
+        if not king_pos:
+            return False
+
+        if self.game_mode.is_quantum:
+            # QUANTUM: Check via ANY attack (native OR tethered abilities)
+            return self.is_under_any_attack(king_pos, not self.white_to_move)
+        else:
+            # LINEAR: Only native attacks deliver check (Native Lethality rule)
+            return self.is_under_native_attack(king_pos, not self.white_to_move)
 
     def is_checkmate(self) -> bool:
         """Check if the current side is in checkmate."""
