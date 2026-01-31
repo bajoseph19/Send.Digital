@@ -11,6 +11,10 @@ THE DISCONNECTION:
 When a piece moves from Rank A to Rank B, it IMMEDIATELY loses all borrowed
 capabilities from Rank A allies. On the next turn, it gains new capabilities
 from any allies on Rank B. The entanglement is position-based, not persistent.
+
+GAME MODES:
+- LINEAR: Pieces teleport to destinations their rank-mates can reach
+- QUANTUM: All pieces share combined abilities; each position calculates moves with union of all abilities
 """
 
 from typing import List, Optional, Dict, Tuple, Set
