@@ -95,10 +95,16 @@ class TetherChessEngine:
         axis_desc = "horizontal (same row)" if not self.game_mode.is_file_based else "vertical (same column)"
         self.game_log.append(f"ENTANGLEMENT AXIS: {axis} - {axis_desc}")
         self.game_log.append("")
-        self.game_log.append("FOUR UNIQUE RULES:")
+        self.game_log.append("RULES:")
         self.game_log.append(f"1. {axis} Entanglement - Pieces share movement with {tether_type}")
         self.game_log.append("2. Pawn-Knight Apex - Pawn + Knight jump to 8th = instant promotion")
-        self.game_log.append("3. Native Lethality - Only native moves can deliver check")
+
+        # Rule 3 differs between Linear and Quantum
+        if self.game_mode.is_quantum:
+            self.game_log.append("3. TETHER LETHALITY - Tether threats deliver check (Native Lethality OFF)")
+        else:
+            self.game_log.append("3. Native Lethality - Only native moves can deliver check")
+
         self.game_log.append("4. No Recursive Jumping - One teleport per turn maximum")
         self.game_log.append("")
 

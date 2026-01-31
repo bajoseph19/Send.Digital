@@ -349,12 +349,28 @@ class Board:
         """
         STEP 3: validateLethality(piece, position, enemyKingPosition)
 
-        NATIVE LETHALITY RULE:
-        A piece can only deliver check using its own native movement.
-        A teleporting Rook next to a King does NOT check unless
-        the King is on the Rook's file or rank.
+        LINEAR MODE - NATIVE LETHALITY RULE:
+            A piece can only deliver check using its own native movement.
+            A teleporting Rook next to a King does NOT check unless
+            the King is on the Rook's file or rank.
+
+        QUANTUM MODE - TETHER LETHALITY:
+            Native Lethality is removed. Any piece that can reach the King
+            via native OR tethered abilities delivers check.
         """
-        return piece.can_natively_attack(piece_position, enemy_king_position)
+        # Native attack always counts
+        if piece.can_natively_attack(piece_position, enemy_king_position):
+            return True
+
+        # In Quantum mode, tethered attacks also count as lethal
+        if self.game_mode.is_quantum:
+            # Check if piece can attack king via tethered abilities
+            tether_mates = self.identify_tether_mates(piece, piece_position)
+            for mate, _ in tether_mates:
+                if mate.can_natively_attack(piece_position, enemy_king_position):
+                    return True
+
+        return False
 
     def is_under_native_attack(self, target: Position, by_white: bool) -> bool:
         """Check if a position is under attack by native movement only."""
@@ -369,36 +385,37 @@ class Board:
 
     def is_under_any_attack(self, target: Position, by_white: bool) -> bool:
         """
-        STEALTH CAPTURE PREVENTION:
         Check if a position is under attack by ANY move (native OR transporter).
 
-        The King is forbidden from moving into any square that can be attacked
-        by any enemy piece, including squares reachable via Tethered/Borrowed moves.
+        Used for:
+        - STEALTH CAPTURE PREVENTION: King can't move to attackable squares
+        - QUANTUM CHECK DETECTION: Tether threats deliver check
 
-        This is different from Check detection, which only uses native attacks.
+        In Quantum mode, this determines check. In Linear mode, only used for King safety.
         """
         # First check native attacks (fast path)
         if self.is_under_native_attack(target, by_white):
             return True
 
-        # Now check transporter attacks:
-        # A piece can attack any square that its rank-mates can reach
+        # Now check transporter attacks based on game mode's entanglement axis
         for x in range(8):
             for y in range(8):
                 piece = self.squares[x][y]
                 if piece and piece.is_white == by_white:
-                    # Find rank-mates for this piece
                     piece_pos = Position(x, y)
-                    rank = y
 
-                    for mate_x in range(8):
-                        if mate_x == x:
-                            continue
-                        mate = self.squares[mate_x][rank]
-                        if mate and mate.is_white == by_white:
-                            # Check if mate can reach target from MATE's position
-                            mate_origin = Position(mate_x, rank)
-                            if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                    # Get tether-mates based on game mode (rank or file)
+                    tether_mates = self.identify_tether_mates(piece, piece_pos)
+
+                    for mate, mate_origin in tether_mates:
+                        # LINEAR: Check if mate can reach target from mate's position
+                        if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                            return True
+
+                        # QUANTUM: Also check if piece can reach target using mate's abilities
+                        # from the PIECE's position (inherited abilities)
+                        if self.game_mode.is_quantum:
+                            if self._can_transporter_reach(mate, piece_pos, target, piece_pos):
                                 return True
 
         return False
@@ -784,9 +801,28 @@ class Board:
         self.white_to_move = not self.white_to_move
 
     def is_in_check(self) -> bool:
-        """Check if the current side is in check."""
+        """
+        Check if the current side is in check.
+
+        LINEAR MODE (Native Lethality):
+            Only native moves can deliver check. A piece teleporting next to
+            the King doesn't check unless its native movement threatens the King.
+
+        QUANTUM MODE (Tether Check):
+            Native Lethality is REMOVED. If any piece on a tether can attack
+            the King using their combined/inherited abilities, that's check.
+            The tether itself creates the threat.
+        """
         king_pos = self.find_king(self.white_to_move)
-        return self.is_under_native_attack(king_pos, not self.white_to_move) if king_pos else False
+        if not king_pos:
+            return False
+
+        if self.game_mode.is_quantum:
+            # QUANTUM: Check via ANY attack (native OR tethered abilities)
+            return self.is_under_any_attack(king_pos, not self.white_to_move)
+        else:
+            # LINEAR: Only native attacks deliver check (Native Lethality rule)
+            return self.is_under_native_attack(king_pos, not self.white_to_move)
 
     def is_checkmate(self) -> bool:
         """Check if the current side is in checkmate."""

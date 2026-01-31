@@ -435,10 +435,11 @@ def main():
             st.info(f"🚀 Transporter moves: {transporter_count}")
 
         # Rules - dynamic based on current mode
-        st.subheader("📜 The Four Rules")
+        st.subheader("📜 The Rules")
 
-        # Get axis-specific terminology
+        # Get mode-specific terminology
         is_vertical = st.session_state.game_mode.is_file_based
+        is_quantum = st.session_state.game_mode.is_quantum
         axis_name = "Vertical" if is_vertical else "Horizontal"
         tether_type = "file" if is_vertical else "rank"
         direction = "column" if is_vertical else "row"
@@ -455,12 +456,25 @@ def main():
             promotes **IMMEDIATELY**. (Shown in gold)
             """)
 
-        with st.expander("3. Native Lethality", expanded=False):
-            st.markdown("""
-            Only a piece's **native** movement can deliver check.
-            A Rook teleporting next to a King doesn't check
-            unless the King is on the Rook's file or rank.
-            """)
+        # Rule 3 differs between Linear and Quantum modes
+        if is_quantum:
+            with st.expander("3. Tether Lethality ⚡", expanded=False):
+                st.markdown("""
+                **Native Lethality is REMOVED in Quantum mode!**
+
+                If ANY piece on the tether can attack the King using their
+                **combined/inherited abilities**, that's CHECK.
+
+                The tether itself creates the threat - forming a dangerous
+                tether near the enemy King is immediately lethal!
+                """)
+        else:
+            with st.expander("3. Native Lethality", expanded=False):
+                st.markdown("""
+                Only a piece's **native** movement can deliver check.
+                A Rook teleporting next to a King doesn't check
+                unless the King is on the Rook's file or rank.
+                """)
 
         with st.expander("4. No Recursive Jumping", expanded=False):
             st.markdown("""
