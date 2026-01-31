@@ -275,7 +275,8 @@ class TetherChessEngine:
         if not piece:
             return []
 
-        return [p.position for p in self.board.identify_rank_mates(piece)]
+        # identify_rank_mates now returns List[Tuple[Piece, Position]]
+        return [pos for _, pos in self.board.identify_rank_mates(piece, piece_position)]
 
     # ========================================================================
     # Getters
