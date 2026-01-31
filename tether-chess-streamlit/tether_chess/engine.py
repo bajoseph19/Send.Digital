@@ -29,7 +29,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
-from .models import Position, PieceType, Piece, Move
+from .models import Position, PieceType, Piece, Move, GameMode
 from .board import Board
 
 
@@ -56,18 +56,36 @@ class MoveResult:
 class TetherChessEngine:
     """Main orchestrator for Tether Chess."""
 
-    def __init__(self):
-        self.board = Board()
+    def __init__(self, game_mode: GameMode = GameMode.LINEAR):
+        self.game_mode = game_mode
+        self.board = Board(game_mode=game_mode)
         self.game_state = GameState.ONGOING
         self.game_log: List[str] = []
 
+    def set_game_mode(self, mode: GameMode):
+        """Change the game mode (LINEAR or QUANTUM)."""
+        self.game_mode = mode
+        self.board.game_mode = mode
+
+    def get_game_mode(self) -> GameMode:
+        """Get the current game mode."""
+        return self.game_mode
+
     def new_game(self):
         """Initialize a new game."""
+        self.board = Board(game_mode=self.game_mode)
         self.board.setup_starting_position()
         self.game_state = GameState.ONGOING
         self.game_log.clear()
-        self.game_log.append("=== TETHER CHESS (Tal's Forest) ===")
+
+        mode_name = "LINEAR" if self.game_mode == GameMode.LINEAR else "QUANTUM"
+        self.game_log.append(f"=== {mode_name} TAXI CHESS (Tal's Forest) ===")
         self.game_log.append("Game started. White to move.")
+        self.game_log.append("")
+        if self.game_mode == GameMode.LINEAR:
+            self.game_log.append("LINEAR MODE: Pieces TELEPORT to rank-mates' destinations")
+        else:
+            self.game_log.append("QUANTUM MODE: Pieces INHERIT rank-mates' movement abilities")
         self.game_log.append("")
         self.game_log.append("FOUR UNIQUE RULES:")
         self.game_log.append("1. Rank Entanglement - Pieces share movement with rank-mates")

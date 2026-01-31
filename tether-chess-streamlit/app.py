@@ -5,7 +5,7 @@ A playable chess variant with Geometric Entanglement.
 """
 
 import streamlit as st
-from tether_chess import TetherChessEngine, Position, PieceType, Move
+from tether_chess import TetherChessEngine, Position, PieceType, Move, GameMode
 
 # Page configuration
 st.set_page_config(
@@ -82,8 +82,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize session state
+if 'game_mode' not in st.session_state:
+    st.session_state.game_mode = GameMode.LINEAR
+
 if 'engine' not in st.session_state:
-    st.session_state.engine = TetherChessEngine()
+    st.session_state.engine = TetherChessEngine(game_mode=st.session_state.game_mode)
     st.session_state.engine.new_game()
 
 if 'selected_square' not in st.session_state:
@@ -308,7 +311,9 @@ def render_board(engine: TetherChessEngine):
 def main():
     engine = st.session_state.engine
 
-    st.title("♞ Tether Chess (Tal's Forest)")
+    # Title reflects current mode
+    mode_name = "Linear" if st.session_state.game_mode == GameMode.LINEAR else "Quantum"
+    st.title(f"♞ {mode_name} Taxi Chess (Tal's Forest)")
 
     # Layout
     col1, col2 = st.columns([2, 1])
@@ -358,12 +363,34 @@ def main():
         # Controls
         st.subheader("Controls")
 
+        # Game Mode Toggle
+        st.markdown("**🎮 Game Variant**")
+        mode_options = {"Linear Taxi Chess": GameMode.LINEAR, "Quantum Taxi Chess": GameMode.QUANTUM}
+        current_mode_name = "Linear Taxi Chess" if st.session_state.game_mode == GameMode.LINEAR else "Quantum Taxi Chess"
+
+        selected_mode_name = st.radio(
+            "Select mode:",
+            options=list(mode_options.keys()),
+            index=0 if st.session_state.game_mode == GameMode.LINEAR else 1,
+            horizontal=True,
+            help="LINEAR: Teleport to rank-mates' destinations | QUANTUM: Inherit rank-mates' abilities"
+        )
+
+        new_mode = mode_options[selected_mode_name]
+        mode_changed = new_mode != st.session_state.game_mode
+
         if st.button("🔄 New Game", use_container_width=True):
+            st.session_state.game_mode = new_mode
+            st.session_state.engine = TetherChessEngine(game_mode=new_mode)
             st.session_state.engine.new_game()
             st.session_state.selected_square = None
             st.session_state.legal_moves_for_selected = []
-            st.session_state.message = "New game started!"
+            mode_label = "LINEAR" if new_mode == GameMode.LINEAR else "QUANTUM"
+            st.session_state.message = f"New {mode_label} Taxi Chess game started!"
             st.rerun()
+
+        if mode_changed:
+            st.info("⚠️ Click 'New Game' to apply the new mode")
 
         st.checkbox("Show Transporter Moves", value=True, key="show_transporter_moves")
 

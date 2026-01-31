@@ -11,9 +11,9 @@ THE DISCONNECTION:
 When a piece moves ranks, it immediately loses old allies and gains new ones.
 """
 
-from .models import Position, PieceType, Piece, Move
+from .models import Position, PieceType, Piece, Move, GameMode
 from .board import Board
 from .engine import TetherChessEngine
 
-__all__ = ['Position', 'PieceType', 'Piece', 'Move', 'Board', 'TetherChessEngine']
+__all__ = ['Position', 'PieceType', 'Piece', 'Move', 'GameMode', 'Board', 'TetherChessEngine']
 __version__ = '1.0.0'
