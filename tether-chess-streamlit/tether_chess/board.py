@@ -391,13 +391,18 @@ class Board:
         - STEALTH CAPTURE PREVENTION: King can't move to attackable squares
         - QUANTUM CHECK DETECTION: Tether threats deliver check
 
-        In Quantum mode, this determines check. In Linear mode, only used for King safety.
+        IMPORTANT - Offense vs Defense asymmetry in Quantum mode:
+        - OFFENSE (moving): Pieces can use union of all tether positions' abilities
+        - DEFENSE (attack checking): Tether-mates BLOCK attacks normally (no see-through)
+
+        This prevents the "transparent file" glitch where pieces on the same file
+        could attack through each other.
         """
         # First check native attacks (fast path)
         if self.is_under_native_attack(target, by_white):
             return True
 
-        # Now check transporter attacks based on game mode's entanglement axis
+        # Now check transporter attacks based on game mode
         for x in range(8):
             for y in range(8):
                 piece = self.squares[x][y]
@@ -407,16 +412,49 @@ class Board:
                     # Get tether-mates based on game mode (rank or file)
                     tether_mates = self.identify_tether_mates(piece, piece_pos)
 
-                    for mate, mate_origin in tether_mates:
-                        # LINEAR: Check if mate can reach target from mate's position
-                        if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
-                            return True
-
-                        # QUANTUM: Also check if piece can reach target using mate's abilities
-                        # from the PIECE's position (inherited abilities)
-                        if self.game_mode.is_quantum:
-                            if self._can_transporter_reach(mate, piece_pos, target, piece_pos):
+                    if self.game_mode.is_quantum:
+                        # QUANTUM DEFENSE: Check attacks from piece's OWN position
+                        # using inherited abilities. Tether-mates BLOCK normally.
+                        for mate, _ in tether_mates:
+                            # Check if piece can attack target using mate's abilities
+                            # from the piece's position (NOT from mate's position)
+                            if self._can_attack_with_inherited_ability(
+                                piece, piece_pos, mate, target
+                            ):
                                 return True
+                    else:
+                        # LINEAR: Check if piece can teleport to target via mate's destinations
+                        for mate, mate_origin in tether_mates:
+                            if self._can_transporter_reach(mate, mate_origin, target, piece_pos):
+                                return True
+
+        return False
+
+    def _can_attack_with_inherited_ability(
+        self, piece: Piece, piece_pos: Position, mate: Piece, target: Position
+    ) -> bool:
+        """
+        QUANTUM DEFENSE: Check if piece at piece_pos can attack target using mate's abilities.
+        All pieces (including tether-mates) block the path normally - no see-through!
+        """
+        for dx, dy, is_sliding in mate.get_native_movement_vectors():
+            if is_sliding:
+                for distance in range(1, 8):
+                    check_pos = piece_pos.offset(dx * distance, dy * distance)
+                    if not check_pos.is_valid():
+                        break
+
+                    if check_pos == target:
+                        return True
+
+                    # Path blocked by ANY piece (including tether-mates - no see-through!)
+                    if self.get_piece_at(check_pos):
+                        break
+            else:
+                # Non-sliding: Knight L-jump, King step
+                check_pos = piece_pos.offset(dx, dy)
+                if check_pos.is_valid() and check_pos == target:
+                    return True
 
         return False
 

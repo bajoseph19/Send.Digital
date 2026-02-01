@@ -460,20 +460,16 @@ def main():
         if is_quantum:
             with st.expander("3. Tether Lethality ⚡", expanded=False):
                 st.markdown("""
-                **Native Lethality is REMOVED in Quantum mode!**
+                **QUANTUM MODE uses Tether Lethality.**
 
-                If ANY piece on the tether can attack the King using their
-                **combined/inherited abilities**, that's CHECK.
-
-                The tether itself creates the threat - forming a dangerous
-                tether near the enemy King is immediately lethal!
+                The tether creates the threat - inherited abilities can deliver check.
                 """)
         else:
             with st.expander("3. Native Lethality", expanded=False):
                 st.markdown("""
-                Only a piece's **native** movement can deliver check.
-                A Rook teleporting next to a King doesn't check
-                unless the King is on the Rook's file or rank.
+                **LINEAR MODE uses Native Lethality.**
+
+                Only a piece's native movement can deliver check.
                 """)
 
         with st.expander("4. No Recursive Jumping", expanded=False):
